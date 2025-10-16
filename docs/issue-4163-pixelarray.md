@@ -5,7 +5,7 @@ a single PixelArray element (`px[x][y] = [r, g, b]` or `px[x, y] = [...]`)
 crashed the interpreter with a segmentation fault.  
 - **Expected behaviour**: The target pixel should be mapped to the supplied 
 color, consistent with the PixelArray assignment rules documented in 
-`docs/reST/ref/pixelarray.rst`.
+`docs/reST/ref/pixelarray.rst`.https://github.com/razeenwasif/pygame/tree/fix-pixelarray-segfault
 
 ## Reproduction & Failure Analysis
 1. Initial reproduction used the snippet from the issue report on a freshly 
@@ -91,3 +91,6 @@ single-pixel writes in `src_c/pixelarray.c`.
 `test/pixelarray_test.py` to capture the regression.  
 - Documented the full analysis, decision points, guidelines consulted, and 
 verification steps in this report to streamline reviewer onboarding for pull request.
+
+# Github repo link:
+https://github.com/razeenwasif/pygame/tree/fix-pixelarray-segfault
