@@ -6,6 +6,14 @@ crashed the interpreter with a segmentation fault.
 - **Expected behaviour**: The target pixel should be mapped to the supplied 
 color, consistent with the PixelArray assignment rules documented in 
 `docs/reST/ref/pixelarray.rst`.https://github.com/razeenwasif/pygame/tree/fix-pixelarray-segfault
+- **Stacktrace error**:
+```python 
+>>> import pygame 
+>>> test = pygame.Surface([800, 800])
+>>> testbuf = pygame.PixelArray(test)
+>>> testbuf[400][400] = [255,255,0]
+[1]  2774837 segmentation fault (core dumped) python3
+```
 
 ## Reproduction & Failure Analysis
 1. Initial reproduction used the snippet from the issue report on a freshly 
@@ -22,7 +30,7 @@ That path expects per-column sequences (see lines 24–47 of
 ## Implementation Details
 - Updated `_pxarray_ass_item` (`src_c/pixelarray.c:1320`) to detect 1×1 views 
 (`shape[1] == 0` for chained indexing and `(shape[0], shape[1]) == (1, 1)` for 
-tuple indexing). For those cases, non-tuple sequences of length 3 or 4 are 
+tuple indexing). For those cases, non-tuple sequences (i.e. lists) of length 3 or 4 are 
 converted to RGBA via `pg_RGBAFromObj`, then mapped through `SDL_MapRGBA`.  
 - The guard keeps legacy behaviour for wider assignments (`px[x] = [values...]`)
 intact; those still route through `_array_assign_sequence`, preserving the 
@@ -55,9 +63,10 @@ regressions.
   pygame = importlib.util.module_from_spec(spec)
   sys.modules["pygame"] = pygame
   spec.loader.exec_module(pygame)
-  surf = pygame.Surface((10, 10))
-  px = pygame.PixelArray(surf)
-  px[3, 4] = [255, 128, 0]   # no segfault, pixel updated
+  test = pygame.Surface((800, 800))
+  px = pygame.PixelArray(test)
+  px[400][400] = [255, 255, 0]   # no segfault, pixel updated
+  print(px[400][400]) # 16776960
   ```
 - Verified the entire `pixelarray_test` suite using the reusable helper script 
 `scripts/run_pixelarray_tests.py`, which auto-detects the built package 
