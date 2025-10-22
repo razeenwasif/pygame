@@ -5,8 +5,8 @@ a single PixelArray element (`px[x][y] = [r, g, b]` or `px[x, y] = [...]`)
 crashed the interpreter with a segmentation fault.  
 - **Expected behaviour**: The target pixel should be mapped to the supplied 
 color, consistent with the PixelArray assignment rules documented in 
-`docs/reST/ref/pixelarray.rst`.https://github.com/razeenwasif/pygame/tree/fix-pixelarray-segfault
-- **Stacktrace error**:
+`docs/reST/ref/pixelarray.rst`.
+- **Reproduction snippet**:
 ```python 
 >>> import pygame 
 >>> test = pygame.Surface([800, 800])
@@ -28,7 +28,7 @@ That path expects per-column sequences (see lines 24–47 of
 `docs/reST/ref/pixelarray.rst`), so the empty temporary slice led to the crash.
 
 ## Implementation Details
-- Updated `_pxarray_ass_item` (`src_c/pixelarray.c:1320`) to detect 1×1 views 
+- Updated `_pxarray_ass_item` (in `src_c/pixelarray.c`) to detect 1×1 views 
 (`shape[1] == 0` for chained indexing and `(shape[0], shape[1]) == (1, 1)` for 
 tuple indexing). For those cases, non-tuple sequences (i.e. lists) of length 3 or 4 are 
 converted to RGBA via `pg_RGBAFromObj`, then mapped through `SDL_MapRGBA`.  
@@ -40,12 +40,21 @@ immediately instead of continuing with an invalid state.
 
 ## Regression Coverage
 - Added `PixelArrayTypeTest.test_single_pixel_sequence_color` in 
-`test/pixelarray_test.py:1235`. The test exercises both chained (`px[x][y]`) 
+`test/pixelarray_test.py`. The test exercises both chained (`px[x][y]`) 
 and tuple (`px[x, y]`) indexing with list colors to confirm the fix and prevent 
 regressions.
 - Followed the test structure guidance from `test/README.rst` 
 (importing `pygame.tests.test_utils` at the top and nesting assertions inside 
 `unittest.TestCase` methods).
+
+## Scope & Impact
+- Removes a crash in a core API path and aligns single-pixel assignment
+  semantics with user expectations that tuple/list are interchangeable for
+  a single color.
+- Keeps existing, documented semantics for wider assignments (lists treated as
+  sequences of per-column values) unchanged.
+- Adds a focused regression test and CI guard to prevent reintroducing the
+  crash.
 
 ## Validation & Commands
 - Built extensions in-place to ensure C changes were active:
@@ -100,6 +109,47 @@ single-pixel writes in `src_c/pixelarray.c`.
 `test/pixelarray_test.py` to capture the regression.  
 - Documented the full analysis, decision points, guidelines consulted, and 
 verification steps in this report to streamline reviewer onboarding for pull request.
+
+## PR Process
+- Branch: `fix-pixelarray-segfault`.
+- Changes touch `src_c/pixelarray.c` (assignment path),
+  `src_c/pixelarray_methods.c` (color parsing behavior reference),
+  `test/pixelarray_test.py` (new regression), `scripts/run_pixelarray_tests.py`
+  (helper), and `.github/workflows/format-lint.yml` (CI job).
+- PR description references issue #4163, summarizes root cause, details the
+  single-pixel sequence → color mapping, and explains why wider assignment
+  semantics remain unchanged.
+- CI builds in-tree extensions and runs the targeted regression suite.
+
+## Edge Cases and Behavior
+- Single pixel assignment:
+  - Non-tuple sequences of length 3 or 4 (e.g., lists) are mapped to a color.
+  - Other sequence lengths raise `ValueError` (consistent with `pg_RGBAFromObj`).
+- Wider assignments (e.g., `px[x] = [...]`):
+  - Non-tuple sequences are treated as sequences of per-column values,
+    and their length must match the width of the target slice.
+- Tuple and `pygame.Color` semantics are unchanged.
+- 24-bit surfaces (3-byte pixels): existing channel-offset remapping for
+  array-to-array copies remains unchanged.
+
+## Performance Considerations
+- The additional detection for 1×1 views in `_pxarray_ass_item` is a constant
+  time check on an already-hot path; no measurable performance impact was
+  observed in manual testing.
+
+## Documentation Considerations
+- The PixelArray reference (`docs/reST/ref/pixelarray.rst`) states single-pixel
+  assignments accept tuples or `pygame.Color`. This change extends that behavior
+  to allow any length-3/4 sequence for single-pixel assignment. Recommend
+  updating wording to “a (r, g, b[, a]) sequence (e.g., tuple or list)” to make
+  this explicit while leaving the wider-assignment rule (sequence length must
+  match width) intact.
+
+## Open Questions / Future Work
+- Confirm whether release notes should explicitly call out the extended
+  single-pixel assignment behavior.
+- Consider adding a short snippet to the PixelArray docs demonstrating both
+  tuple and list usage for single pixels.
 
 # Github repo link:
 https://github.com/razeenwasif/pygame/tree/fix-pixelarray-segfault
